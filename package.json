@@ -1,0 +1,45 @@
+{
+  "name": "dsh-split-chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Open any DeepSeek Harness session as a full chat tab in the right sidebar, next to the main conversation.",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "sidebar",
+    "chat",
+    "conversation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imshz6669/dsh-split-chat.git"
+  },
+  "homepage": "https://github.com/imshz6669/dsh-split-chat#readme",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/",
+    "cordis.patch.yml",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "entry": "./client"
+    }
+  }
+}
