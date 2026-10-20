@@ -16,14 +16,19 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 | 重复打开同一会话 | 聚焦已有 tab（框架按 `contentId` 去重），不会重复创建 |
 | 关闭 tab / 收起右栏 | 释放该会话保留，不影响主区 |
 | 右栏分栏 | 右栏可再分一格 → **主区 + 右栏最多 3 个对话** |
-| 主区切到别的会话 | 右栏布局按主会话保存，切回来时 tab 还在（框架现有行为） |
+| 主区切到别的会话 | **已打开的右栏对话会跟着走**（不再按主会话隔离），切到新会话也保留；原本收起的右栏保持收起 |
 | 右侧打开的正是主区当前会话 | tab 内显示「该会话已在主区打开」，不重复挂载编辑器（会话编辑器是单 root 设计） |
+| 跨栏发送 | 两个输入框旁都有 **⇄**：把本栏选中的文字（没选中时取最后一条回复）填到**另一侧输入框**；**Shift+点击**直接发送 |
 
 ## 截图
 
 | 两边各自独立收发（主区 8 条 / 右栏 8 条） | 分栏 → 3 个对话 |
 |---|---|
 | ![双栏独立收发](docs/dual-send.png) | ![三个对话](docs/three-panes.png) |
+
+| 切主会话，右栏对话跟着走 | 跨栏发送：主区 ⇄ → 右栏输入框 |
+|---|---|
+| ![全局右栏](docs/global-tabs.png) | ![跨栏发送](docs/cross-pane.png) |
 
 | 同一会话已在主区 | 窄窗口自动全屏 |
 |---|---|
@@ -71,7 +76,8 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 1. 左侧会话行 → `...` → **「在右侧打开」**（或悬停行点 ⧉）。
 2. 右栏出现该会话的对话 tab，正常发消息即可。
 3. 右栏标题栏的 `+` / 分栏按钮可以再开一格；`×` 关闭 tab。
-4. 想换一个会话？关掉 tab，或直接把主区切到别的会话（右栏布局随主会话保存）。
+4. 主区切到别的会话：**右栏对话跟着过去**（全局右栏）；想清空右栏就关掉 tab。
+5. 想把内容搬到另一侧：在对话里选中一段文字（或不选，默认取最后一条回复），点输入框旁的 **⇄** —— 内容会填进另一侧的输入框，检查后按回车即可；按住 **Shift** 点 ⇄ 则直接发送。
 
 > ⚠️ **会话行必须有至少一条消息**（非 blank）才会显示 `...` 菜单和悬停按钮 —— 这是 DSH 本身对 blank 会话的规则，不是插件的问题。新会话先发一句话即可。
 
@@ -89,6 +95,11 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
   → 共享对话正文 + Composer（走该会话自己的 Session Controller）
 ```
 
+两个附加机制：
+
+- **全局跟随**：订阅 `ctx.sidebarRight.mounted`（当前主会话）。主区切到另一个会话时，把上一块右栏面板里的 `splitchat` tab 在**新主会话**里重新 `openResource`（宿主 dock 布局按会话保存，这是让 tab 呈现"全局"的唯一方式）。新会话 dock 还没就绪时自动重试；上一块面板原本是收起的，跟随后再收起，不强行弹开。
+- **跨栏发送**：`conversation.input.right` 里注册一个 ⇄ 按钮；点击时读取本栏选区或最后一条 `assistant-step` 正文，经 `ctx.get('conversation').input.shell(目标会话).actions` 写入目标输入框（`setDraft`，Shift 时再 `submit()`），与 Composer 用的是同一套输入门面。
+
 注册清单（全部在 `lib/client.js` 的 `apply()`）：
 
 | 注册点 | 内容 |
@@ -100,6 +111,7 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 | `splitchat.conversation` | 嵌入对话；主区同时保留该会话时显示「已在主区打开」提示 |
 | `sidebar.workspaces.session.menu.item` | `...` 菜单行，order 250 |
 | `sidebar.workspaces.session.row.action` | 会话行悬停按钮，order 150 |
+| `conversation.input.right` | 每个输入框前的 ⇄ 跨栏发送按钮（order 900） |
 
 会话保留用 `ctx.sessions.retain(id, { source: 'splitChat', signal })`：tab 存活期间持有，关闭 tab（资源流 abort）时在 `finally` 里 `release()`。重复会话检测读 `retainedBy.mainView`（`useSessionRetainInfo`）。
 
@@ -118,14 +130,35 @@ dsh-split-chat/
 
 无构建链：`lib/client.js` 是手写 client-module bundle（`window.__ModuleLoader__.load(...)`）。
 
+## 验证状态（0.2.1-rc.2 实测）
+
+隔离实例（独立 `DSH_HOME` + 临时 profile，Chrome headless/CDP 自动操作）验收：
+
+| 检查 | 结果 |
+|---|---|
+| `...` 菜单出现「在右侧打开」，点击后右栏展开并出现该会话 tab | 通过 |
+| 会话行悬停 ⧉ 按钮同动作 | 通过 |
+| 主区与右栏各自发消息、独立运行（两边各 4→8 条，主区生成中右栏可发） | 通过 |
+| 重复打开同一会话 → 聚焦已有 tab，不新增 | 通过 |
+| 关闭 tab 释放会话；关最后一个 tab 右栏收起 | 通过 |
+| 刷新页面 → tab 与对话恢复 | 通过 |
+| 右栏打开主区当前会话 → 「该会话已在主区打开」提示，切回恢复 | 通过 |
+| 分栏 → 主区 + 右栏 2 格 = 3 个对话各自可用 | 通过 |
+| 窄窗口 <768px → 右栏 fullscreen，无高度塌陷 | 通过 |
+| **切主会话 → 右栏 tab 跟随**（含切到一个全新会话） | 通过（0.2.0 新增） |
+| **跟随不会在手动关掉 tab 后复活**（切到全新会话验证） | 通过（0.2.0 新增） |
+| **跨栏发送 ⇄**：主区→右栏、右栏→主区、选中文字引用 | 通过（0.2.0 新增，目标输入框得到正确正文） |
+
 ## 兼容性 & 已知限制
 
-- 依赖 DSH **内部公共接口**（`sidebarRight` / `sidebarRightTabs` / `sessions.retain` / slot 体系）。已在 `0.2.1-rc.2` 上逐条核对并验收；**0.2.2+ 升级后需要回归**，改动点集中在 `lib/client.js` 的 5 处注册与 2 个 slot 组件。
-- hero 页（没有选中会话）没有 dock 面：`openResource` 会抛错，本插件回退为**在主区打开**该会话（v1 接受该行为）。
+- 依赖 DSH **内部公共接口**（`sidebarRight` / `sidebarRightTabs` / `sessions.retain` / `conversation.input` / slot 体系）。已在 `0.2.1-rc.2` 上逐条核对并验收；**0.2.2+ 升级后需要回归**，改动点集中在 `lib/client.js` 的 8 处注册与 3 个 slot 组件。
+- 全局跟随会把当前右栏 tab 写进**新主会话自己的 dock 布局**（宿主按主会话持久化布局，每个访问过的会话各存一份）——这是"全局"在现有框架下的实现方式；关掉 tab 后再切会话不会复活。
+- 跨栏发送提取的是**纯文本**（选区或最后一条回复正文），不保留富文本/Markdown 结构；依赖 `conversation.input` 服务，宿主未提供该服务时按钮仍在但会提示失败。
+- hero 页（没有选中会话）没有 dock 面：`openResource` 会抛错，本插件回退为**在主区打开**该会话。
 - 同一会话不能同时主区 + 右栏编辑（显示提示）；右栏布局按主会话保存。
 - 右栏宽度上限：初始 45%、最大 70%、主区保底 400px；窗口 < 768px 时右栏自动全屏（覆盖而非并排）。
 - 会话被归档/删除后资源打开失败：tab 显示「无法打开该会话」，关掉即可。
-- 不做「在右栏新建会话」（v2）。
+- 不做「在右栏新建会话」。
 - 无 Host 逻辑、无数据库变更、无模型/token 成本。
 
 ## License

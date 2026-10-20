@@ -1,6 +1,6 @@
 {
   "name": "dsh-split-chat",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Open any DeepSeek Harness session as a full chat tab in the right sidebar, next to the main conversation.",
