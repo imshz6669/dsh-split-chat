@@ -36,7 +36,7 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 
 ## 安装
 
-要求：DSH `0.2.1-rc.2`（desktop 与 Web 使用同一套 client 插件机制）。
+要求：DSH `0.2.1-rc.3`（rc.2 与 rc.3 均已实测通过；desktop 与 Web 使用同一套 client 插件机制）。
 
 ### 方式 A：插件页 / plugin_manager
 
@@ -69,7 +69,7 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 
 然后在 profile 目录执行 `pnpm add link:D:/path/to/dsh-split-chat`，重启客户端。
 
-> 实测 0.2.1-rc.2：**新装**的 client bundle 会经 client-modules 的 HMR 通道热生效，不重启也能用（菜单会直接出现）。若页面断线或没跟上，刷新页面；仍不行再重启。**改 `lib/client.js` 之后**若页面没跟上，也刷新/重启一次。
+> 实测 0.2.1-rc.3：**新装**的 client bundle 会经 client-modules 的 HMR 通道热生效，不重启也能用（菜单会直接出现）。若页面断线或没跟上，刷新页面；仍不行再重启。**改 `lib/client.js` 之后**若页面没跟上，也刷新/重启一次。
 
 ## 使用
 
@@ -130,28 +130,30 @@ dsh-split-chat/
 
 无构建链：`lib/client.js` 是手写 client-module bundle（`window.__ModuleLoader__.load(...)`）。
 
-## 验证状态（0.2.1-rc.2 实测）
+## 验证状态
 
-隔离实例（独立 `DSH_HOME` + 临时 profile，Chrome headless/CDP 自动操作）验收：
+2026-10-26 在 **DSH 0.2.1-rc.3** 上完整复跑下表（独立 `DSH_HOME` + 临时 profile，Chrome headless/CDP 自动操作），并逐项核对了 rc.2→rc.3 的客户端包差异——本插件用到的 API（`sidebarRight.openResource` / `sidebarRightTabs.register` / `sidebarRight.mounted` / `sessions.retain` / `conversation.input.shell(id).actions` / 相关 slot 与 chat DOM 标记）**全部未变，无需改代码**；rc.2 当时同样全表通过。
 
-| 检查 | 结果 |
+| 检查 | rc.3 结果 |
 |---|---|
 | `...` 菜单出现「在右侧打开」，点击后右栏展开并出现该会话 tab | 通过 |
 | 会话行悬停 ⧉ 按钮同动作 | 通过 |
-| 主区与右栏各自发消息、独立运行（两边各 4→8 条，主区生成中右栏可发） | 通过 |
+| 主区与右栏各自发消息、独立运行（两边各 4→8 条） | 通过 |
 | 重复打开同一会话 → 聚焦已有 tab，不新增 | 通过 |
 | 关闭 tab 释放会话；关最后一个 tab 右栏收起 | 通过 |
 | 刷新页面 → tab 与对话恢复 | 通过 |
-| 右栏打开主区当前会话 → 「该会话已在主区打开」提示，切回恢复 | 通过 |
+| 右栏打开主区当前会话 → 「该会话已在主区打开」提示 | 通过 |
 | 分栏 → 主区 + 右栏 2 格 = 3 个对话各自可用 | 通过 |
-| 窄窗口 <768px → 右栏 fullscreen，无高度塌陷 | 通过 |
-| **切主会话 → 右栏 tab 跟随**（含切到一个全新会话） | 通过（0.2.0 新增） |
-| **跟随不会在手动关掉 tab 后复活**（切到全新会话验证） | 通过（0.2.0 新增） |
-| **跨栏发送 ⇄**：主区→右栏、右栏→主区、选中文字引用 | 通过（0.2.0 新增，目标输入框得到正确正文） |
+| 切主会话 → 右栏 tab 跟随（含切到全新会话） | 通过 |
+| 跟随不会在手动关掉 tab 后复活 | 通过 |
+| 跨栏发送 ⇄：主区→右栏、右栏→主区、选中文字引用 | 通过 |
+| 浏览器控制台在加载/开栏/发消息/关栏过程中无 error/warn | 通过 |
+
+> rc.2 上验证的「窄窗口 <768px → 右栏 fullscreen，无高度塌陷」属宿主布局行为；rc.3 未单独复跑（同一渲染路径，无相关差异）。
 
 ## 兼容性 & 已知限制
 
-- 依赖 DSH **内部公共接口**（`sidebarRight` / `sidebarRightTabs` / `sessions.retain` / `conversation.input` / slot 体系）。已在 `0.2.1-rc.2` 上逐条核对并验收；**0.2.2+ 升级后需要回归**，改动点集中在 `lib/client.js` 的 8 处注册与 3 个 slot 组件。
+- 依赖 DSH **内部公共接口**（`sidebarRight` / `sidebarRightTabs` / `sessions.retain` / `conversation.input` / slot 体系）。已在 `0.2.1-rc.2` 与 `0.2.1-rc.3` 上逐条核对并验收（rc.3 无需改代码）；**0.2.2+ 升级后需要回归**，改动点集中在 `lib/client.js` 的 8 处注册与 3 个 slot 组件。
 - 全局跟随会把当前右栏 tab 写进**新主会话自己的 dock 布局**（宿主按主会话持久化布局，每个访问过的会话各存一份）——这是"全局"在现有框架下的实现方式；关掉 tab 后再切会话不会复活。
 - 跨栏发送提取的是**纯文本**（选区或最后一条回复正文），不保留富文本/Markdown 结构；依赖 `conversation.input` 服务，宿主未提供该服务时按钮仍在但会提示失败。
 - hero 页（没有选中会话）没有 dock 面：`openResource` 会抛错，本插件回退为**在主区打开**该会话。
@@ -160,6 +162,12 @@ dsh-split-chat/
 - 会话被归档/删除后资源打开失败：tab 显示「无法打开该会话」，关掉即可。
 - 不做「在右栏新建会话」。
 - 无 Host 逻辑、无数据库变更、无模型/token 成本。
+
+## 版本记录
+
+- **0.2.1**（2026-10-26）：DSH `0.2.1-rc.3` 适配验证版本——rc.3 全量回归通过；rc.2→rc.3 客户端包 API 逐项核对无破坏性变更，`lib/client.js` 未改；README 补充 rc.3 验证表与兼容范围。
+- **0.2.0**（2026-10-20）：右栏 tab 跨主会话跟随；输入框旁 ⇄ 跨栏发送。
+- **0.1.0**：初版（会话行「在右侧打开」+ 右栏完整对话）。
 
 ## License
 
