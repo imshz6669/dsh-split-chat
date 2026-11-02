@@ -34,9 +34,13 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 |---|---|
 | ![重复会话提示](docs/duplicate-notice.png) | ![窄窗口](docs/narrow-fullscreen.png) |
 
+| 菜单行与内置行对齐（`icon` + 动作文案） |
+|---|
+| ![菜单行](docs/menu-icon.png) |
+
 ## 安装
 
-要求：DSH `0.2.1-rc.3`（rc.2 与 rc.3 均已实测通过；desktop 与 Web 使用同一套 client 插件机制）。
+要求：DSH `0.2.1-rc.5`（rc.2 / rc.3 / rc.5 均已实测；desktop 与 Web 使用同一套 client 插件机制）。插件只硬依赖 `slots` / `locale` 两个稳定核心服务，其余宿主能力在运行时探测、缺失时降级——见「抗 DSH 升级」。
 
 ### 方式 A：插件页 / plugin_manager
 
@@ -69,7 +73,9 @@ Open any DSH session as a full chat tab in the right sidebar, while the main are
 
 然后在 profile 目录执行 `pnpm add link:D:/path/to/dsh-split-chat`，重启客户端。
 
-> 实测 0.2.1-rc.3：**新装**的 client bundle 会经 client-modules 的 HMR 通道热生效，不重启也能用（菜单会直接出现）。若页面断线或没跟上，刷新页面；仍不行再重启。**改 `lib/client.js` 之后**若页面没跟上，也刷新/重启一次。
+> **存放位置很重要**：把本目录放在 **DSH 安装目录之外**（不要放在 `D:\dsh` 里面）。DSH 桌面版升级/重装会清空安装目录，放在里面的插件源码会被一并删掉，profile 里的 `link:` 随即失效——这是“升级后插件没了”最常见的原因。
+
+> 实测 0.2.1-rc.5：**新装**的 client bundle 会经 client-modules 的 HMR 通道热生效，不重启也能用（菜单会直接出现）。若页面断线或没跟上，刷新页面；仍不行再重启。**改 `lib/client.js` 之后**若页面没跟上，也刷新/重启一次。
 
 ## 使用
 
@@ -130,13 +136,13 @@ dsh-split-chat/
 
 无构建链：`lib/client.js` 是手写 client-module bundle（`window.__ModuleLoader__.load(...)`）。
 
-## 验证状态
+## 验证状态（0.2.2 / DSH 0.2.1-rc.5）
 
-2026-10-26 在 **DSH 0.2.1-rc.3** 上完整复跑下表（独立 `DSH_HOME` + 临时 profile，Chrome headless/CDP 自动操作），并逐项核对了 rc.2→rc.3 的客户端包差异——本插件用到的 API（`sidebarRight.openResource` / `sidebarRightTabs.register` / `sidebarRight.mounted` / `sessions.retain` / `conversation.input.shell(id).actions` / 相关 slot 与 chat DOM 标记）**全部未变，无需改代码**；rc.2 当时同样全表通过。
+2026-11-02 在 **DSH 0.2.1-rc.5** 上完整复跑下表（独立 `DSH_HOME` + 临时 profile，Chrome headless/CDP 自动操作）。rc.5 与 rc.3 的对照：客户端基线（web-frontend / sidebar-right / resources / renderer / session / subagent / locale）**字节一致**，仅 `ui-conversation` 有 +655B 的小改动，核心链路无变化。此前 rc.2、rc.3 同样全表通过。
 
-| 检查 | rc.3 结果 |
+| 检查 | 0.2.2 / rc.5 结果 |
 |---|---|
-| `...` 菜单出现「在右侧打开」，点击后右栏展开并出现该会话 tab | 通过 |
+| `...` 菜单出现「在右侧打开」（带图标、与内置行同列） | 通过 |
 | 会话行悬停 ⧉ 按钮同动作 | 通过 |
 | 主区与右栏各自发消息、独立运行（两边各 4→8 条） | 通过 |
 | 重复打开同一会话 → 聚焦已有 tab，不新增 | 通过 |
@@ -147,13 +153,24 @@ dsh-split-chat/
 | 切主会话 → 右栏 tab 跟随（含切到全新会话） | 通过 |
 | 跟随不会在手动关掉 tab 后复活 | 通过 |
 | 跨栏发送 ⇄：主区→右栏、右栏→主区、选中文字引用 | 通过 |
+| 加载时控制台输出 `[dsh-split-chat] 0.2.2 host capabilities`，各项能力均为 true | 通过 |
 | 浏览器控制台在加载/开栏/发消息/关栏过程中无 error/warn | 通过 |
 
-> rc.2 上验证的「窄窗口 <768px → 右栏 fullscreen，无高度塌陷」属宿主布局行为；rc.3 未单独复跑（同一渲染路径，无相关差异）。
+> rc.2 上验证的「窄窗口 <768px → 右栏 fullscreen」属宿主布局行为；rc.3/rc.5 未单独复跑（同一渲染路径，无相关差异）。
+
+## 抗 DSH 升级
+
+DSH 仍在快速迭代，内部接口会变。这个插件用三层做法避免“升级一次就整个用不了”：
+
+1. **源码不放在安装目录**：`D:\dsh` 这类安装目录在升级/重装时会被清空，放在里面的插件源码会被一并删除，profile 的 `link:` 随之失效。插件源码应放在固定目录（如 `G:\Tools\dsh-plugins\`），安装目录怎么升级都不影响。
+2. **能力探测 + 功能级降级**：`inject` 只硬依赖 `slots` / `locale` 两个稳定核心服务；`sidebarRight` / `sessions` / `uiWorkspace` / `conversation.input` 全部通过 `ctx.get` 运行时探测。某个能力缺失或被改名时，只关闭对应功能（菜单、右栏、跟随、⇄ 互相独立），不会让整个插件加载失败或让页面报错。
+3. **分座位错误边界**：每个 slot 座位（tab 正文、嵌入对话、tab 标题、菜单行、悬停按钮、⇄）各包一层 React error boundary。某个座位的宿主 props 变了，只在该座位显示「插件与当前 DSH 版本不兼容」的降级提示，其余功能继续工作。
+
+升级后可这样自检：浏览器控制台会打印一行 `[dsh-split-chat] <version> host capabilities {…}`，哪项是 `false` 就对应哪块降级；降级发生时还会有 `[dsh-split-chat] degraded capability "<name>"` 的 `console.warn`。更新插件即可恢复完整功能；如果只是源码目录丢了，重新 `link:` 安装一次即可。
 
 ## 兼容性 & 已知限制
 
-- 依赖 DSH **内部公共接口**（`sidebarRight` / `sidebarRightTabs` / `sessions.retain` / `conversation.input` / slot 体系）。已在 `0.2.1-rc.2` 与 `0.2.1-rc.3` 上逐条核对并验收（rc.3 无需改代码）；**0.2.2+ 升级后需要回归**，改动点集中在 `lib/client.js` 的 8 处注册与 3 个 slot 组件。
+- 依赖 DSH **内部公共接口**（`sidebarRight` / `sidebarRightTabs` / `sessions.retain` / `conversation.input` / slot 体系）。已在 `0.2.1-rc.2` / `rc.3` / `rc.5` 上逐条核对并验收；`0.2.2` 起改为**能力探测 + 分座位降级**（见「抗 DSH 升级」），接口漂移只会关闭对应功能。大版本升级后仍建议看一眼控制台的 capabilities 行。
 - 全局跟随会把当前右栏 tab 写进**新主会话自己的 dock 布局**（宿主按主会话持久化布局，每个访问过的会话各存一份）——这是"全局"在现有框架下的实现方式；关掉 tab 后再切会话不会复活。
 - 跨栏发送提取的是**纯文本**（选区或最后一条回复正文），不保留富文本/Markdown 结构；依赖 `conversation.input` 服务，宿主未提供该服务时按钮仍在但会提示失败。
 - hero 页（没有选中会话）没有 dock 面：`openResource` 会抛错，本插件回退为**在主区打开**该会话。
@@ -165,6 +182,7 @@ dsh-split-chat/
 
 ## 版本记录
 
+- **0.2.2**（2026-11-02）：菜单行与内置行对齐（补 `icon`、文案只写动作，来自 #1）；抗 DSH 升级改造——源码建议放在安装目录之外、`inject` 收敛为 `slots`/`locale`、其余服务运行时探测、每个 slot 座位加错误边界与能力自检行；rc.5 全量回归。
 - **0.2.1**（2026-10-26）：DSH `0.2.1-rc.3` 适配验证版本——rc.3 全量回归通过；rc.2→rc.3 客户端包 API 逐项核对无破坏性变更，`lib/client.js` 未改；README 补充 rc.3 验证表与兼容范围。
 - **0.2.0**（2026-10-20）：右栏 tab 跨主会话跟随；输入框旁 ⇄ 跨栏发送。
 - **0.1.0**：初版（会话行「在右侧打开」+ 右栏完整对话）。
